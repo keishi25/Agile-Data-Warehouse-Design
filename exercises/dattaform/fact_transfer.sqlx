@@ -1,0 +1,26 @@
+config {
+  type: "incremental", schema: "bank_dw", tags: ["fact"],
+  bigquery: { partitionBy: "DATE(event_ts)" }, uniqueKey: "event_id",
+  dependencies: ["bank_dw.dim_customer","bank_dw.dim_account","bank_dw.dim_channel","bank_dw.dim_date"]
+}
+
+SELECT
+  tr.transfer_id AS event_id,
+  tr.initiated_ts AS event_ts,
+  DATE(tr.initiated_ts) AS date_sk,
+  IFNULL(dc.customer_sk,0) AS customer_sk,
+  IFNULL(da.account_sk ,0) AS account_sk,
+  IFNULL(ch.channel_sk ,0) AS channel_sk,
+  tr.amount, tr.fee_amount, tr.dest_bank_code, tr.dest_branch_code
+FROM `bank_src.src_transfer_order` tr
+LEFT JOIN `bank_dw.dim_customer` dc
+  ON dc.customer_id = tr.customer_id AND dc.is_current
+  AND tr.initiated_ts >= dc.valid_from AND (dc.valid_to IS NULL OR tr.initiated_ts < dc.valid_to)
+LEFT JOIN `bank_dw.dim_account` da
+  ON da.account_id = tr.debit_account_id AND da.is_current
+  AND tr.initiated_ts >= da.valid_from AND (da.valid_to IS NULL OR tr.initiated_ts < da.valid_to)
+LEFT JOIN `bank_dw.dim_channel` ch
+  ON ch.channel_code = tr.channel_code
+WHERE ${incremental()
+  ? `tr.initiated_ts > (SELECT IFNULL(MAX(event_ts), TIMESTAMP '1900-01-01') FROM ${self()})`
+  : 'TRUE'}

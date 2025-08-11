@@ -1,0 +1,20 @@
+config { type: "operations", tags: ["dim","type1"], dependencies: ["bank_dw.vw_dim_atm_location_snapshot","bank_dw.dim_atm_location"] }
+
+MERGE `bank_dw.dim_atm_location` d
+USING (
+  SELECT ABS(FARM_FINGERPRINT(atm_location_id)) AS atm_location_sk, *,
+         CURRENT_TIMESTAMP() AS valid_from
+  FROM `bank_dw.vw_dim_atm_location_snapshot`
+) s
+ON d.atm_location_id = s.atm_location_id
+WHEN MATCHED THEN UPDATE SET
+  d.provider_name = s.provider_name,
+  d.prefecture_code = s.prefecture_code,
+  d.city_name = s.city_name,
+  d.active_flag = s.active_flag,
+  d.valid_from = s.valid_from,
+  d.valid_to = NULL,
+  d.is_current = TRUE
+WHEN NOT MATCHED THEN
+  INSERT (atm_location_sk, atm_location_id, provider_name, prefecture_code, city_name, active_flag, valid_from, valid_to, is_current)
+  VALUES (s.atm_location_sk, s.atm_location_id, s.provider_name, s.prefecture_code, s.city_name, s.active_flag, s.valid_from, NULL, TRUE);

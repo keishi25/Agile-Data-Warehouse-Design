@@ -1,0 +1,89 @@
+config { type: "operations", tags: ["init"] }
+
+/* DWHテーブルをIF NOT EXISTSで用意（Unknown=SK0 も作成） */
+BEGIN;
+
+-- ディメンション
+CREATE SCHEMA IF NOT EXISTS `bank_dw`;
+
+CREATE TABLE IF NOT EXISTS `bank_dw.dim_customer` (
+  customer_sk INT64 NOT NULL,
+  customer_id STRING NOT NULL,
+  name STRING, birth_date DATE, gender_code STRING, status_code STRING,
+  address_line STRING, city_name STRING, prefecture_code STRING,
+  valid_from TIMESTAMP NOT NULL, valid_to TIMESTAMP, is_current BOOL NOT NULL,
+  CONSTRAINT pk_dim_customer PRIMARY KEY (customer_sk) NOT ENFORCED
+);
+
+CREATE TABLE IF NOT EXISTS `bank_dw.dim_account` (
+  account_sk INT64 NOT NULL,
+  account_id STRING NOT NULL,
+  account_type_code STRING, account_type_name STRING,
+  currency_code STRING, currency_name STRING,
+  status_code STRING, status_name STRING,
+  opened_at TIMESTAMP,
+  valid_from TIMESTAMP NOT NULL, valid_to TIMESTAMP, is_current BOOL NOT NULL,
+  CONSTRAINT pk_dim_account PRIMARY KEY (account_sk) NOT ENFORCED
+);
+
+CREATE TABLE IF NOT EXISTS `bank_dw.dim_date` (
+  date_sk DATE NOT NULL, year INT64, quarter INT64, month INT64, day INT64, weekday INT64,
+  CONSTRAINT pk_dim_date PRIMARY KEY (date_sk) NOT ENFORCED
+);
+
+CREATE TABLE IF NOT EXISTS `bank_dw.dim_channel` (
+  channel_sk INT64 NOT NULL, channel_code STRING NOT NULL,
+  channel_name STRING, channel_type STRING, platform_code STRING, active_flag BOOL,
+  CONSTRAINT pk_dim_channel PRIMARY KEY (channel_sk) NOT ENFORCED
+);
+
+CREATE TABLE IF NOT EXISTS `bank_dw.dim_atm_location` (
+  atm_location_sk INT64 NOT NULL, atm_location_id STRING NOT NULL,
+  provider_name STRING, prefecture_code STRING, city_name STRING,
+  active_flag BOOL, valid_from TIMESTAMP, valid_to TIMESTAMP, is_current BOOL,
+  CONSTRAINT pk_dim_atm_location PRIMARY KEY (atm_location_sk) NOT ENFORCED
+);
+
+-- Unknown行（SK=0）
+INSERT INTO `bank_dw.dim_customer` (customer_sk, customer_id, name, valid_from, valid_to, is_current)
+SELECT 0,'UNKNOWN',NULL, TIMESTAMP '1900-01-01 00:00:00+00', NULL, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM `bank_dw.dim_customer` WHERE customer_sk=0);
+
+INSERT INTO `bank_dw.dim_account` (account_sk, account_id, valid_from, valid_to, is_current)
+SELECT 0,'UNKNOWN', TIMESTAMP '1900-01-01 00:00:00+00', NULL, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM `bank_dw.dim_account` WHERE account_sk=0);
+
+INSERT INTO `bank_dw.dim_channel` (channel_sk, channel_code, channel_name, channel_type, platform_code, active_flag)
+SELECT 0,'UNK','不明','不明','-',FALSE
+WHERE NOT EXISTS (SELECT 1 FROM `bank_dw.dim_channel` WHERE channel_sk=0);
+
+INSERT INTO `bank_dw.dim_atm_location` (atm_location_sk, atm_location_id, provider_name, active_flag, valid_from, is_current)
+SELECT 0,'UNKNOWN','-',FALSE,TIMESTAMP '1900-01-01 00:00:00+00',TRUE
+WHERE NOT EXISTS (SELECT 1 FROM `bank_dw.dim_atm_location` WHERE atm_location_sk=0);
+
+-- ファクト
+CREATE TABLE IF NOT EXISTS `bank_dw.fact_account_open` (
+  event_id STRING NOT NULL, event_ts TIMESTAMP, date_sk DATE,
+  customer_sk INT64, account_sk INT64, channel_sk INT64, account_cnt INT64
+);
+CREATE TABLE IF NOT EXISTS `bank_dw.fact_deposit` (
+  event_id STRING NOT NULL, event_ts TIMESTAMP, date_sk DATE,
+  customer_sk INT64, account_sk INT64, channel_sk INT64, atm_location_sk INT64,
+  amount NUMERIC, fee_amount NUMERIC
+);
+CREATE TABLE IF NOT EXISTS `bank_dw.fact_withdrawal` (
+  event_id STRING NOT NULL, event_ts TIMESTAMP, date_sk DATE,
+  customer_sk INT64, account_sk INT64, channel_sk INT64, atm_location_sk INT64,
+  amount NUMERIC, fee_amount NUMERIC
+);
+CREATE TABLE IF NOT EXISTS `bank_dw.fact_transfer` (
+  event_id STRING NOT NULL, event_ts TIMESTAMP, date_sk DATE,
+  customer_sk INT64, account_sk INT64, channel_sk INT64,
+  amount NUMERIC, fee_amount NUMERIC, dest_bank_code STRING, dest_branch_code STRING
+);
+CREATE TABLE IF NOT EXISTS `bank_dw.fact_balance_view` (
+  event_id STRING NOT NULL, event_ts TIMESTAMP, date_sk DATE,
+  customer_sk INT64, account_sk INT64, channel_sk INT64, view_cnt INT64
+);
+
+COMMIT;

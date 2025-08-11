@@ -1,0 +1,9 @@
+ビルド順のコツ
+00_create_dw_tables
+vw_dim_*（スナップショット）
+op_dim_*_merge（顧客・口座）＋ dim_channel_upsert・dim_atm_location_upsert
+dim_date
+fact_*
+
+Dataform の Run でタグ順（init→snap→dim→date→fact）に流すのが楽。
+ATMロケーションとコア取引の時刻突合が必要なら、fact_deposit/withdrawal にそのJOINロジックも追記します。

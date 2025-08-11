@@ -1,0 +1,19 @@
+config { type: "table", schema: "bank_dw", tags: ["dim","date"] }
+
+WITH bounds AS (
+  SELECT LEAST(
+    (SELECT DATE(MIN(opened_at))      FROM `bank_src.src_core_account`),
+    (SELECT DATE(MIN(event_ts))       FROM `bank_src.src_core_transaction`),
+    (SELECT DATE(MIN(atm_txn_ts))     FROM `bank_src.src_atm_transaction`),
+    (SELECT DATE(MIN(initiated_ts))   FROM `bank_src.src_transfer_order`),
+    (SELECT DATE(MIN(event_ts))       FROM `bank_src.src_app_event`)
+  ) AS dmin,
+  DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY) AS dmax
+)
+SELECT d AS date_sk,
+  EXTRACT(YEAR FROM d) AS year,
+  EXTRACT(QUARTER FROM d) AS quarter,
+  EXTRACT(MONTH FROM d) AS month,
+  EXTRACT(DAY FROM d) AS day,
+  EXTRACT(DAYOFWEEK FROM d)-1 AS weekday
+FROM bounds, UNNEST(GENERATE_DATE_ARRAY(dmin, dmax)) AS d;

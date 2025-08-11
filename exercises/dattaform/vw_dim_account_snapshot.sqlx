@@ -1,0 +1,23 @@
+config { type: "view", schema: "bank_dw", tags: ["snap","dim"] }
+
+WITH st AS (
+  SELECT * FROM (
+    SELECT s.*, ROW_NUMBER() OVER (PARTITION BY account_id
+      ORDER BY IFNULL(valid_to, TIMESTAMP '9999-12-31 00:00:00+00') DESC, valid_from DESC) rn
+    FROM `bank_src.src_core_account_status_hist` s
+  ) WHERE rn=1
+),
+type_lu AS (SELECT account_type_code, account_type_name FROM `bank_src.src_ref_account_type`),
+curr_lu AS (SELECT currency_code, currency_name FROM `bank_src.src_ref_currency`),
+stat_lu AS (SELECT status_code, status_name FROM `bank_src.src_ref_account_status`)
+SELECT
+  a.account_id, a.opened_at,
+  a.account_type_code, t.account_type_name,
+  a.currency_code,     cur.currency_name,
+  st.status_code,      sl.status_name,
+  CURRENT_TIMESTAMP() AS valid_from
+FROM `bank_src.src_core_account` a
+LEFT JOIN st      USING (account_id)
+LEFT JOIN type_lu t ON a.account_type_code = t.account_type_code
+LEFT JOIN curr_lu cur ON a.currency_code   = cur.currency_code
+LEFT JOIN stat_lu sl ON st.status_code     = sl.status_code;

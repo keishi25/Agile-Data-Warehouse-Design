@@ -1,0 +1,30 @@
+config { type: "operations", tags: ["dim","scd2"], dependencies: ["bank_dw.vw_dim_customer_snapshot","bank_dw.dim_customer","bank_dw.dim_date"] }
+
+/* Close（差分検知して現行をクローズ） */
+MERGE `bank_dw.dim_customer` d
+USING `bank_dw.vw_dim_customer_snapshot` s
+ON d.customer_id = s.customer_id AND d.is_current = TRUE
+WHEN MATCHED AND (
+  SAFE_CAST(d.name            AS STRING)  != SAFE_CAST(s.name            AS STRING) OR
+  SAFE_CAST(d.birth_date      AS DATE)    != SAFE_CAST(s.birth_date      AS DATE) OR
+  SAFE_CAST(d.gender_code     AS STRING)  != SAFE_CAST(s.gender_code     AS STRING) OR
+  SAFE_CAST(d.status_code     AS STRING)  != SAFE_CAST(s.status_code     AS STRING) OR
+  SAFE_CAST(d.address_line    AS STRING)  != SAFE_CAST(s.address_line    AS STRING) OR
+  SAFE_CAST(d.city_name       AS STRING)  != SAFE_CAST(s.city_name       AS STRING) OR
+  SAFE_CAST(d.prefecture_code AS STRING)  != SAFE_CAST(s.prefecture_code AS STRING)
+) THEN
+  UPDATE SET d.valid_to = s.valid_from, d.is_current = FALSE;
+
+/* Insert（新規/変更後バージョン） */
+MERGE `bank_dw.dim_customer` d
+USING (
+  SELECT
+    ABS(FARM_FINGERPRINT(CONCAT(customer_id,'|',FORMAT_TIMESTAMP('%F %T', valid_from)))) AS customer_sk, *
+  FROM `bank_dw.vw_dim_customer_snapshot`
+) s
+ON d.customer_id = s.customer_id AND d.valid_from = s.valid_from
+WHEN NOT MATCHED THEN
+  INSERT (customer_sk, customer_id, name, birth_date, gender_code, status_code,
+          address_line, city_name, prefecture_code, valid_from, valid_to, is_current)
+  VALUES (s.customer_sk, s.customer_id, s.name, s.birth_date, s.gender_code, s.status_code,
+          s.address_line, s.city_name, s.prefecture_code, s.valid_from, NULL, TRUE);

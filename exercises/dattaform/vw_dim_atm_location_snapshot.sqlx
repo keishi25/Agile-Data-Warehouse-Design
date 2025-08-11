@@ -1,0 +1,3 @@
+config { type: "view", schema: "bank_dw", tags: ["snap","dim"] }
+SELECT atm_location_id, provider_name, prefecture_code, city_name, active_flag
+FROM `bank_src.src_atm_location`;

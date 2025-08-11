@@ -1,0 +1,16 @@
+config { type: "operations", tags: ["dim","type1"], dependencies: ["bank_dw.vw_dim_channel_snapshot","bank_dw.dim_channel"] }
+
+MERGE `bank_dw.dim_channel` d
+USING (
+  SELECT ABS(FARM_FINGERPRINT(channel_code)) AS channel_sk, *
+  FROM `bank_dw.vw_dim_channel_snapshot`
+) s
+ON d.channel_code = s.channel_code
+WHEN MATCHED THEN UPDATE SET
+  d.channel_name = s.channel_name,
+  d.channel_type = s.channel_type,
+  d.platform_code = s.platform_code,
+  d.active_flag = s.active_flag
+WHEN NOT MATCHED THEN
+  INSERT (channel_sk, channel_code, channel_name, channel_type, platform_code, active_flag)
+  VALUES (s.channel_sk, s.channel_code, s.channel_name, s.channel_type, s.platform_code, s.active_flag);

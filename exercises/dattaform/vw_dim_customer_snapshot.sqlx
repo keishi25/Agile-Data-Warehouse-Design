@@ -1,0 +1,20 @@
+config { type: "view", schema: "bank_dw", tags: ["snap","dim"] }
+
+WITH addr AS (
+  SELECT * FROM (
+    SELECT a.*,
+      ROW_NUMBER() OVER (PARTITION BY customer_id
+        ORDER BY IFNULL(valid_to, TIMESTAMP '9999-12-31 00:00:00+00') DESC, valid_from DESC) rn
+    FROM `bank_src.src_core_customer_address_hist` a
+  ) WHERE rn=1
+)
+SELECT
+  c.customer_id,
+  c.legal_name AS name,
+  c.birth_date,
+  c.gender_code,
+  c.status_code,
+  a.address_line, a.city_name, a.prefecture_code,
+  CURRENT_TIMESTAMP() AS valid_from
+FROM `bank_src.src_core_customer` c
+LEFT JOIN addr a USING (customer_id);

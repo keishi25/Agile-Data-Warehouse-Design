@@ -1,0 +1,2 @@
+config { type: "view", schema: "bank_dw", tags: ["snap","dim"] }
+SELECT * FROM `bank_src.src_ref_channel`;
